@@ -11,7 +11,7 @@ def is_ascii(string):
     return True
 
 # returns false if content has null, blank, or invalid "name", "type", and "length" attributes
-def attributes_are_valid(content, client):
+def attributes_are_valid(content):
     if "name" not in content or "type" not in content or "length" not in content:
         return False
     if content["name"] == "" or content["type"] == "" or content["length"] == "":
@@ -25,15 +25,16 @@ def attributes_are_valid(content, client):
     return True
 
 # returns false if content has null, blank, or invalid "name", "type", and "length" attributes
-def attributes_are_valid_patch(content, client):
-    if content["name"] == "" or content["type"] == "" or content["length"] == "":
-        return False        
-    if len(content["name"]) > 255 or not is_ascii(content["name"]):
-        return False
-    if len(content["type"]) > 255 or not is_ascii(content["type"]):
-        return False       
-    if content["length"] < 0 or content["length"] > 10000:
-        return False
+def attributes_are_valid_patch(content):
+    if "name" in content:
+        if content["name"] == "" or len(content["name"]) > 255 or not is_ascii(content["name"]):
+            return False
+    if "type" in content:
+        if content["type"] == "" or len(content["type"]) > 255 or not is_ascii(content["type"]):
+            return False
+    if "length" in content:
+        if content["length"] == "" or content["length"] < 0 or content["length"] > 10000:
+            return False        
     return True
 
 # returns true if boat name is already in use, otherwise false

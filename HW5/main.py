@@ -1,5 +1,5 @@
 from google.cloud import datastore
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from string import Template 
 import json
 import constants
@@ -29,7 +29,7 @@ def boats_get_post():
         content = request.get_json()
 
         #return 400 if content values are missing/invalid
-        if not helpers.attributes_are_valid(content, client):
+        if not helpers.attributes_are_valid(content):
             content = {"Error": "The required attributes are missing or invalid"}
             return jsonify(content), 400
 
@@ -121,7 +121,7 @@ def specific_boat_get_edit_delete(boat_id):
         if request.method == 'PUT':
             
             #return 400 if content values are missing/invalid
-            if not helpers.attributes_are_valid(content, client):
+            if not helpers.attributes_are_valid(content):
                 content = {"Error": "The required attributes are missing or invalid"}
                 return jsonify(content), 400
 
@@ -135,18 +135,20 @@ def specific_boat_get_edit_delete(boat_id):
                                     "length": content["length"]})
             client.put(specific_boat)
 
-            # add id and self url to object and return
-            specific_boat.update({  "id" : str(specific_boat.key.id), 
-                                    "self": request.url+"/"+str(specific_boat.key.id)})
-            return jsonify(specific_boat), 303            
+            # add redirect header to response and return
+            res = make_response()
+            res.headers.set("Location",request.url)
+            res.status_code = 303
+            return res
 
         # PATCH EDIT (edit any attribute(s))
         else:
-            #return 400 if content values are missing/invalid
-            if not helpers.attributes_are_valid_patch(content, client):
+            #return 400 if content values are invalid
+            if not helpers.attributes_are_valid_patch(content):
                 content = {"Error": "The required attributes are invalid"}
                 return jsonify(content), 400
 
+            #if present, check if name is unique
             if "name" in content:
                 if helpers.name_already_in_use(content["name"], client):
                     content = {"Error": "Name already in use"}
@@ -162,10 +164,9 @@ def specific_boat_get_edit_delete(boat_id):
             client.put(specific_boat)       
 
             # add id and self url to object and return
-            specific_boat.update({  "id" : str(specific_boat.key.id), 
-                                    "self": request.url+"/"+str(specific_boat.key.id)})
+            specific_boat["id"] = str(specific_boat.key.id)
+            specific_boat["self"] = request.url
             return jsonify(specific_boat), 200            
-
 
     else:
         content = {"Error": "Method not allowed"}
