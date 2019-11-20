@@ -15,6 +15,10 @@ def index():
 @app.route('/boats', methods=['POST'])
 def boats_get_post():
 
+    if request.method != 'POST':
+        content = {"Error": "Method not allowed"}
+        return jsonify(content), 405
+
     # Check that request is json & accepts a json response
     if not request.is_json:
         content = {"Error": "Request content type must be 'application/json'"}
@@ -27,7 +31,7 @@ def boats_get_post():
     # ADD BOAT
     if request.method == 'POST':
         content = request.get_json()
-
+        
         #return 400 if content values are missing/invalid
         if not helpers.attributes_are_valid(content):
             content = {"Error": "The required attributes are missing or invalid"}
@@ -48,10 +52,6 @@ def boats_get_post():
         new_boat.update({   "id" : str(new_boat.key.id), 
                             "self": request.url+"/"+str(new_boat.key.id)})
         return jsonify(new_boat), 201
-    
-    else:
-        content = {"Error": "Method not allowed"}
-        return jsonify(content), 405
 
 @app.route('/boats/<boat_id>', methods=['PUT','PATCH','GET','DELETE'])
 def specific_boat_get_edit_delete(boat_id):  
