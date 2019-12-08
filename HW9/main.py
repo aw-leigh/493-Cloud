@@ -101,8 +101,16 @@ def oauth2callback():
 @app.route('/boats', methods=['POST','GET'])
 def boats_get_post():         
     
+    # Check that request accepts a json response
+    if 'application/json' not in request.accept_mimetypes:
+        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406     
+
     # LIST ALL BOATS
     if request.method == 'GET':
+
+        # Check that request accepts a json response
+        if 'application/json' not in request.accept_mimetypes:
+            return jsonify({"Error": "'application/json' must be Accepted response format"}), 406        
 
         # Add pagination       
         query = client.query(kind=constants.boats)
@@ -134,6 +142,9 @@ def boats_get_post():
 
     # ADD BOAT
     elif request.method == 'POST':
+        
+        if not request.is_json:
+            return jsonify({"Error": "Request content type must be 'application/json'"}), 406 
         
         if 'Authorization' not in request.headers:
             return jsonify({"Error": "No token detected"}), 401
@@ -172,6 +183,10 @@ def boats_get_post():
 @app.route('/slips', methods=['POST','GET'])
 def slips_get_post():         
     
+    # Check that request accepts a json response
+    if 'application/json' not in request.accept_mimetypes:
+        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406    
+    
     # LIST ALL SLIPS
     if request.method == 'GET':
 
@@ -205,6 +220,9 @@ def slips_get_post():
 
     # ADD SLIP
     elif request.method == 'POST':
+        
+        if not request.is_json:
+            return jsonify({"Error": "Request content type must be 'application/json'"}), 406     
         
         if 'Authorization' not in request.headers:
             return jsonify({"Error": "No token detected"}), 401
@@ -244,6 +262,10 @@ def slips_get_post():
 def get_boats_belonging_to_user(user_id):  
 
     # LIST ALL BOATS OWNED BY USER
+
+    # Check that request accepts a json response   
+    if 'application/json' not in request.accept_mimetypes:
+        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406    
     
     owner_id = helpers.authorize_user(request)
 
@@ -267,13 +289,17 @@ def get_boats_belonging_to_user(user_id):
         #add id and self urls
         for boat in results:
             boat["id"] = str(boat.key.id)
-            boat["self"] = request.url+"/"+str(boat.key.id)
+            boat["self"] = request.base_url+"/boats/"+str(boat.key.id)
         return jsonify(results), 200              
 
 @app.route('/users/<user_id>/slips', methods=['GET'])
 def get_slips_belonging_to_user(user_id):  
 
     # LIST ALL SLIPS OWNED BY USER
+
+    # Check that request accepts a json response
+    if 'application/json' not in request.accept_mimetypes:
+        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406 
     
     owner_id = helpers.authorize_user(request)
 
@@ -297,11 +323,18 @@ def get_slips_belonging_to_user(user_id):
         #add id and self urls
         for slip in results:
             slip["id"] = str(slip.key.id)
-            slip["self"] = request.url+"/"+str(slip.key.id)
+            slip["self"] = request.base_url+"/slips/"+str(slip.key.id)
         return jsonify(results), 200              
 
 @app.route('/boats/<boat_id>', methods=['PATCH','PUT'])
 def edit_boat_belonging_to_user(boat_id):  
+
+    # Check that request is json & accepts a json response
+    if not request.is_json:
+        return jsonify({"Error": "Request content type must be 'application/json'"}), 406      
+
+    if 'application/json' not in request.accept_mimetypes:
+        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406 
 
     owner_id = helpers.authorize_user(request)
 
@@ -377,6 +410,13 @@ def delete_boat_belonging_to_user(boat_id):
 @app.route('/slips/<slip_id>', methods=['PATCH','PUT'])
 def edit_slip_belonging_to_user(slip_id):  
 
+    # Check that request is json & accepts a json response
+    if not request.is_json:
+        return jsonify({"Error": "Request content type must be 'application/json'"}), 406      
+
+    if 'application/json' not in request.accept_mimetypes:
+        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406    
+    
     owner_id = helpers.authorize_user(request)
 
     if (int(owner_id) < 0):
