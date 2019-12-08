@@ -25,3 +25,17 @@ def user_exists(client, account_id):
         if user["id"] == account_id:
             return True
     return False
+
+# returns id belonging to token in request if good,
+# returns -1 if no token, -2 if token is invalid
+def authorize_user(request):
+    if 'Authorization' not in request.headers:
+        return -1
+    
+    token = request.headers['Authorization']
+    validation_result = validate_token(token)
+
+    if validation_result == "Invalid Token":
+        return -2
+
+    return validation_result[1]

@@ -103,17 +103,34 @@ def boats_get_post():
     
     # LIST ALL BOATS
     if request.method == 'GET':
-        query = client.query(kind=constants.boats)
-        
-        #get all the boats
-        results = list(query.fetch())
 
-        #add id and self urls, remove owner id
+        # Add pagination       
+        query = client.query(kind=constants.boats)
+        q_limit = int(request.args.get('limit', '5'))
+        q_offset = int(request.args.get('offset', '0'))      
+        l_iterator = query.fetch(limit= q_limit, offset=q_offset)  
+        pages = l_iterator.pages
+        results = list(next(pages))
+        total_num = len(list(query.fetch()))
+        
+        #create next url if necessary
+        if l_iterator.next_page_token:
+            next_offset = q_offset + q_limit
+            next_url = request.base_url + "?limit=" + str(q_limit) + "&offset=" + str(next_offset)
+        else:
+            next_url = None        
+
+        #add id and self urls
         for boat in results:
             boat["id"] = str(boat.key.id)
             boat["self"] = request.url+"/"+str(boat.key.id)
-            boat.pop("owner_id", None)
-        return jsonify(results), 200
+
+        # wrap boats in output object, including next url if available
+        output = {"boats": results}
+        output["total_num_boats"] = total_num
+        if next_url:
+            output["next"] = next_url        
+        return jsonify(output), 200
 
     # ADD BOAT
     elif request.method == 'POST':
@@ -136,41 +153,110 @@ def boats_get_post():
         new_boat = datastore.Entity(client.key(constants.boats))
         new_boat.update({   "name": content["name"], 
                             "type": content["type"],
+                            "length": content["length"],
                             "owner": owner_name,
                             "owner_id": owner_id,
-                            "length": content["length"]})
+                            "slip": None})
         client.put(new_boat)
 
         # add id and self url to display object 
         new_boat.update({   "id" : str(new_boat.key.id), 
                             "self": request.url+"/"+str(new_boat.key.id)})
         
-        # remove owner id from display object and return
-        new_boat.pop("owner_id", None)
+        # return boat to display
         return jsonify(new_boat), 201
     
     else:
-        return 'Method not recogonized'        
+        return jsonify({"Error": "Method not allowed"}), 405     
+
+@app.route('/slips', methods=['POST','GET'])
+def slips_get_post():         
+    
+    # LIST ALL SLIPS
+    if request.method == 'GET':
+
+        # Add pagination       
+        query = client.query(kind=constants.slips)
+        q_limit = int(request.args.get('limit', '5'))
+        q_offset = int(request.args.get('offset', '0'))      
+        l_iterator = query.fetch(limit= q_limit, offset=q_offset)  
+        pages = l_iterator.pages
+        results = list(next(pages))
+        total_num = len(list(query.fetch()))
+        
+        #create next url if necessary
+        if l_iterator.next_page_token:
+            next_offset = q_offset + q_limit
+            next_url = request.base_url + "?limit=" + str(q_limit) + "&offset=" + str(next_offset)
+        else:
+            next_url = None        
+
+        #add id and self urls
+        for slip in results:
+            slip["id"] = str(slip.key.id)
+            slip["self"] = request.url+"/"+str(slip.key.id)
+
+        # wrap slips in output object, including next url if available
+        output = {"slips": results}
+        output["total_num_slips"] = total_num
+        if next_url:
+            output["next"] = next_url        
+        return jsonify(output), 200
+
+    # ADD SLIP
+    elif request.method == 'POST':
+        
+        if 'Authorization' not in request.headers:
+            return jsonify({"Error": "No token detected"}), 401
+        
+        token = request.headers['Authorization']
+        validation_result = helpers.validate_token(token)
+
+        if validation_result == "Invalid Token":
+            return jsonify({"Error": "Invalid token"}), 401
+        
+        owner_name = validation_result[0]
+        owner_id = validation_result[1]
+        
+        content = request.get_json()          
+
+        # if all attributes present and valid, create slip and add to datastore
+        new_slip = datastore.Entity(client.key(constants.slips))
+        new_slip.update({   "number": content["number"], 
+                            "width": content["width"], 
+                            "length": content["length"], 
+                            "owner": owner_name,
+                            "owner_id": owner_id,
+                            "boat": None})
+        client.put(new_slip)
+
+        # add id and self url to display object 
+        new_slip.update({   "id" : str(new_slip.key.id), 
+                            "self": request.url+"/"+str(new_slip.key.id)})
+        
+        # return slip to display
+        return jsonify(new_slip), 201
+    
+    else:
+        return jsonify({"Error": "Method not allowed"}), 405     
 
 @app.route('/users/<user_id>/boats', methods=['GET'])
 def get_boats_belonging_to_user(user_id):  
-# my id: 103017034770342567702
 
-    if 'Authorization' not in request.headers:
-        return jsonify({"Error": "No token detected"}), 401
+    # LIST ALL BOATS OWNED BY USER
     
-    token = request.headers['Authorization']
-    validation_result = helpers.validate_token(token)
+    owner_id = helpers.authorize_user(request)
 
-    if validation_result == "Invalid Token":
+    if (int(owner_id) < 0):
+        if int(owner_id) == -1:
+            return jsonify({"Error": "No token detected"}), 401
         return jsonify({"Error": "Invalid token"}), 401
-
-    owner_id = validation_result[1]
 
     if owner_id != user_id:
         return jsonify({"Error": "Token and URL id mismatch"}), 401
 
-    # LIST ALL BOATS MATCHING USER
+    # if auth good, make request
+
     if request.method == 'GET':
         query = client.query(kind=constants.boats)
         query.add_filter('owner_id', '=', user_id)
@@ -178,27 +264,51 @@ def get_boats_belonging_to_user(user_id):
         #get all the boats
         results = list(query.fetch())
 
-        #add id and self urls, remove owner id
+        #add id and self urls
         for boat in results:
             boat["id"] = str(boat.key.id)
             boat["self"] = request.url+"/"+str(boat.key.id)
-            boat.pop("owner_id", None)
         return jsonify(results), 200              
 
-@app.route('/boats/<boat_id>', methods=['DELETE'])
-def delete_boat_belonging_to_user(boat_id):  
-# my id: 103017034770342567702
+@app.route('/users/<user_id>/slips', methods=['GET'])
+def get_slips_belonging_to_user(user_id):  
 
-    if 'Authorization' not in request.headers:
-        return jsonify({"Error": "No token detected"}), 401
+    # LIST ALL SLIPS OWNED BY USER
     
-    token = request.headers['Authorization']
-    validation_result = helpers.validate_token(token)
+    owner_id = helpers.authorize_user(request)
 
-    if validation_result == "Invalid Token":
+    if (int(owner_id) < 0):
+        if int(owner_id) == -1:
+            return jsonify({"Error": "No token detected"}), 401
         return jsonify({"Error": "Invalid token"}), 401
 
-    owner_id = validation_result[1]
+    if owner_id != user_id:
+        return jsonify({"Error": "Token and URL id mismatch"}), 401
+
+    # if auth good, make request
+    
+    if request.method == 'GET':
+        query = client.query(kind=constants.slips)
+        query.add_filter('owner_id', '=', user_id)
+        
+        #get all the slips
+        results = list(query.fetch())
+
+        #add id and self urls
+        for slip in results:
+            slip["id"] = str(slip.key.id)
+            slip["self"] = request.url+"/"+str(slip.key.id)
+        return jsonify(results), 200              
+
+@app.route('/boats/<boat_id>', methods=['PATCH','PUT'])
+def edit_boat_belonging_to_user(boat_id):  
+
+    owner_id = helpers.authorize_user(request)
+
+    if (int(owner_id) < 0):
+        if int(owner_id) == -1:
+            return jsonify({"Error": "No token detected"}), 401
+        return jsonify({"Error": "Invalid token"}), 401
 
     # find boat corresponding to ID
     specific_boat_key = client.key(constants.boats, int(boat_id))
@@ -206,7 +316,55 @@ def delete_boat_belonging_to_user(boat_id):
 
     # if there is no such boat, error
     if not specific_boat:
-        return jsonify({"Error": "No boat with this boat_id exists"}), 403    
+        return jsonify({"Error": "No boat with this boat_id exists"}), 404    
+
+    # if token bearer doesn't match boat owner, error
+    if specific_boat["owner_id"] != owner_id:
+        return jsonify({"Error": "You do not own this boat"}), 403 
+
+    # if all is good, edit and return
+    content = request.get_json()
+    
+    if request.method == 'PUT':
+        
+        # update entity
+        specific_boat.update({"name": content["name"], 
+                            "type": content["type"],
+                            "length": content["length"]})   
+        client.put(specific_boat)
+    
+    elif request.method == 'PATCH':
+        
+        # update entity
+        for key, value in content.items():
+            if key in specific_boat.keys():
+                specific_boat[key] = value
+
+        client.put(specific_boat)
+
+    # add id and self URL to response
+    specific_boat["id"] = str(specific_boat.key.id)
+    specific_boat["self"] = request.url
+    return jsonify(specific_boat), 200
+
+
+@app.route('/boats/<boat_id>', methods=['DELETE'])
+def delete_boat_belonging_to_user(boat_id):  
+
+    owner_id = helpers.authorize_user(request)
+
+    if (int(owner_id) < 0):
+        if int(owner_id) == -1:
+            return jsonify({"Error": "No token detected"}), 401
+        return jsonify({"Error": "Invalid token"}), 401
+
+    # find boat corresponding to ID
+    specific_boat_key = client.key(constants.boats, int(boat_id))
+    specific_boat = client.get(specific_boat_key)    
+
+    # if there is no such boat, error
+    if not specific_boat:
+        return jsonify({"Error": "No boat with this boat_id exists"}), 404    
 
     # if token bearer doesn't match boat owner, error
     if specific_boat["owner_id"] != owner_id:
@@ -216,6 +374,149 @@ def delete_boat_belonging_to_user(boat_id):
     client.delete(specific_boat_key)
     return "", 204
 
+@app.route('/slips/<slip_id>', methods=['PATCH','PUT'])
+def edit_slip_belonging_to_user(slip_id):  
+
+    owner_id = helpers.authorize_user(request)
+
+    if (int(owner_id) < 0):
+        if int(owner_id) == -1:
+            return jsonify({"Error": "No token detected"}), 401
+        return jsonify({"Error": "Invalid token"}), 401
+
+    # find slip corresponding to ID
+    specific_slip_key = client.key(constants.slips, int(slip_id))
+    specific_slip = client.get(specific_slip_key)    
+
+    # if there is no such slip, error
+    if not specific_slip:
+        return jsonify({"Error": "No slip with this slip_id exists"}), 404    
+
+    # if token bearer doesn't match slip owner, error
+    if specific_slip["owner_id"] != owner_id:
+        return jsonify({"Error": "You do not own this slip"}), 403 
+
+    # if all is good, edit and return
+    content = request.get_json()
+    
+    if request.method == 'PUT':
+        
+        # update entity
+        specific_slip.update({"number": content["number"], 
+                            "width": content["width"], 
+                            "length": content["length"]})                              
+        client.put(specific_slip)
+    
+    elif request.method == 'PATCH':
+        
+        # update entity
+        for key, value in content.items():
+            if key in specific_slip.keys():
+                specific_slip[key] = value
+
+        client.put(specific_slip)
+
+    # add id and self URL to response
+    specific_slip["id"] = str(specific_slip.key.id)
+    specific_slip["self"] = request.url
+    return jsonify(specific_slip), 200
+
+@app.route('/slips/<slip_id>', methods=['DELETE'])
+def delete_slip_belonging_to_user(slip_id):  
+
+    owner_id = helpers.authorize_user(request)
+
+    if (int(owner_id) < 0):
+        if int(owner_id) == -1:
+            return jsonify({"Error": "No token detected"}), 401
+        return jsonify({"Error": "Invalid token"}), 401
+
+    # find slip corresponding to ID
+    specific_slip_key = client.key(constants.slips, int(slip_id))
+    specific_slip = client.get(specific_slip_key)    
+
+    # if there is no such slip, error
+    if not specific_slip:
+        return jsonify({"Error": "No slip with this slip_id exists"}), 404    
+
+    # if token bearer doesn't match slip owner, error
+    if specific_slip["owner_id"] != owner_id:
+        return jsonify({"Error": "You do not own this slip"}), 403 
+
+    # if all is good, delete and return
+    client.delete(specific_slip_key)
+    return "", 204
+
+@app.route('/boats/<boat_id>/slips/<slip_id>/', methods=['PUT','DELETE'])
+def boat_slip_put_delete(boat_id, slip_id):
+
+    owner_id = helpers.authorize_user(request)
+
+    if (int(owner_id) < 0):
+        if int(owner_id) == -1:
+            return jsonify({"Error": "No token detected"}), 401
+        return jsonify({"Error": "Invalid token"}), 401    
+    
+    # find slip & boat corresponding to IDs
+    specific_slip_key = client.key(constants.slips, int(slip_id))
+    specific_slip = client.get(specific_slip_key)
+    specific_boat_key = client.key(constants.boats, int(boat_id))
+    specific_boat = client.get(specific_boat_key)
+
+    # if there is no such slip, error
+    if not specific_slip:
+        return jsonify({"Error": "No slip with this slip_id exists"}), 404    
+
+    # if there is no such boat, error
+    if not specific_boat:
+        return jsonify({"Error": "No boat with this boat_id exists"}), 404    
+
+    # if token bearer doesn't match boat owner, error
+    if specific_boat["owner_id"] != owner_id:
+        return jsonify({"Error": "You do not own this boat"}), 403       
+
+    # if token bearer doesn't match slip owner, error
+    if specific_slip["owner_id"] != owner_id:
+        return jsonify({"Error": "You do not own this slip"}), 403     
+
+
+    # BOAT ARRIVES AT SLIP
+    if request.method == 'PUT':
+        
+        # if slip is occupied, error
+        if specific_slip["boat"] is not None:
+            return jsonify({"Error": "The slip is not empty"}), 403
+        
+        # if boat is already in a slip, error
+        if specific_boat["slip"] is not None:
+            return jsonify({"Error": "The boat is already at a slip"}), 403
+
+        # add boat as current boat
+        specific_slip.update({"boat": str(specific_boat.key.id)})   
+        client.put(specific_slip)
+
+        # add slip as current slip
+        specific_boat.update({"slip": str(specific_slip.key.id)})   
+        client.put(specific_boat)
+
+        return "", 204
+        
+    # BOAT DEPARTS SLIP  
+    elif request.method == 'DELETE':
+
+        # if boat is not at this slip, error
+        if specific_slip["boat"] != str(specific_boat.key.id) or specific_boat["slip"] != str(specific_slip.key.id):
+            return jsonify({"Error": "No boat with this boat_id is at the slip with this slip_id"}), 404
+
+        # remove boat from slip
+        specific_slip.update({"boat": None})
+        client.put(specific_slip)
+
+        # remove slip from boat
+        specific_boat.update({"slip": None})
+        client.put(specific_boat)
+
+        return "", 204
 
 if __name__ == '__main__':
     app.debug = False
