@@ -326,16 +326,27 @@ def get_slips_belonging_to_user(user_id):
             slip["self"] = request.base_url+"/slips/"+str(slip.key.id)
         return jsonify(results), 200              
 
-@app.route('/boats/<boat_id>', methods=['PATCH','PUT'])
-def edit_boat_belonging_to_user(boat_id):  
-
-    # Check that request is json & accepts a json response
-    if not request.is_json:
-        return jsonify({"Error": "Request content type must be 'application/json'"}), 406      
+@app.route('/boats/<boat_id>', methods=['GET','PATCH','PUT'])
+def get_edit_boat_belonging_to_user(boat_id):  
 
     if 'application/json' not in request.accept_mimetypes:
         return jsonify({"Error": "'application/json' must be Accepted response format"}), 406 
+    
+    # find boat corresponding to ID
+    specific_boat_key = client.key(constants.boats, int(boat_id))
+    specific_boat = client.get(specific_boat_key)    
 
+    # if there is no such boat, error
+    if not specific_boat:
+        return jsonify({"Error": "No boat with this boat_id exists"}), 404   
+    
+    # if GET, return boat
+    if request.method == 'GET':
+        specific_boat["id"] = str(specific_boat.key.id)
+        specific_boat["self"] = request.url
+        return jsonify(specific_boat), 200  
+
+    # if not GET, validate token
     owner_id = helpers.authorize_user(request)
 
     if (int(owner_id) < 0):
@@ -343,13 +354,9 @@ def edit_boat_belonging_to_user(boat_id):
             return jsonify({"Error": "No token detected"}), 401
         return jsonify({"Error": "Invalid token"}), 401
 
-    # find boat corresponding to ID
-    specific_boat_key = client.key(constants.boats, int(boat_id))
-    specific_boat = client.get(specific_boat_key)    
-
-    # if there is no such boat, error
-    if not specific_boat:
-        return jsonify({"Error": "No boat with this boat_id exists"}), 404    
+    # Check that request is json
+    if not request.is_json:
+        return jsonify({"Error": "Request content type must be 'application/json'"}), 406   
 
     # if token bearer doesn't match boat owner, error
     if specific_boat["owner_id"] != owner_id:
@@ -407,30 +414,37 @@ def delete_boat_belonging_to_user(boat_id):
     client.delete(specific_boat_key)
     return "", 204
 
-@app.route('/slips/<slip_id>', methods=['PATCH','PUT'])
+@app.route('/slips/<slip_id>', methods=['GET','PATCH','PUT'])
 def edit_slip_belonging_to_user(slip_id):  
+
+    if 'application/json' not in request.accept_mimetypes:
+        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406 
+    
+    # find slip corresponding to ID
+    specific_slip_key = client.key(constants.slips, int(slip_id))
+    specific_slip = client.get(specific_slip_key)     
+
+    # if there is no such slip, error
+    if not specific_slip:
+        return jsonify({"Error": "No slip with this slip_id exists"}), 404    
+    
+    # if GET, return slip
+    if request.method == 'GET':
+        specific_slip["id"] = str(specific_slip.key.id)
+        specific_slip["self"] = request.url
+        return jsonify(specific_slip), 200  
+
 
     # Check that request is json & accepts a json response
     if not request.is_json:
         return jsonify({"Error": "Request content type must be 'application/json'"}), 406      
 
-    if 'application/json' not in request.accept_mimetypes:
-        return jsonify({"Error": "'application/json' must be Accepted response format"}), 406    
-    
     owner_id = helpers.authorize_user(request)
 
     if (int(owner_id) < 0):
         if int(owner_id) == -1:
             return jsonify({"Error": "No token detected"}), 401
         return jsonify({"Error": "Invalid token"}), 401
-
-    # find slip corresponding to ID
-    specific_slip_key = client.key(constants.slips, int(slip_id))
-    specific_slip = client.get(specific_slip_key)    
-
-    # if there is no such slip, error
-    if not specific_slip:
-        return jsonify({"Error": "No slip with this slip_id exists"}), 404    
 
     # if token bearer doesn't match slip owner, error
     if specific_slip["owner_id"] != owner_id:
