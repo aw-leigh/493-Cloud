@@ -10,20 +10,21 @@ import uuid
 import time
 import constants
 import helpers
+import secrets
 
 app = flask.Flask(__name__)
-app.secret_key = b'7ec0ebca067547c999505ab3935846eb'
+app.secret_key = secrets.secret_key
 
-CLIENT_ID = '105875411913-.apps.googleusercontent.com'
-CLIENT_SECRET = '-Lu_2T'
-REDIRECT_URI = 'https://hw-07-wilsoan6.appspot.com/oauth2callback'
+CLIENT_ID = '426572973463-qitv62kthvs62hbuo85accc7um76hp1q.apps.googleusercontent.com'
+CLIENT_SECRET = secrets.client_secret
+REDIRECT_URI = 'https://hw-09-wilsoan6.appspot.com/oauth2callback'
 SCOPES = 'openid email profile'
 
 client = datastore.Client()
 
 @app.route('/')
 def index():
-    return "Please navigate to /boats or /home to use this API"\
+    return "Please navigate to /boats to use this API or /home to register an account"\
 
 ######### AUTHENTICATION #########
 
@@ -49,11 +50,27 @@ def userinfo():
     else:
         credentials = json.loads(flask.session['credentials'])
         jwt = credentials['id_token']
+        person_info = helpers.validate_token(jwt)
+        account_id = person_info[1]
+        account_name = person_info[0]
+
+        # if user doesn't exist in datastore, create new user
+        # in either case, display id, token, and greeting
+        if helpers.user_exists(client, account_id):
+            message = "Welcome back " 
+        else:
+            new_user = datastore.Entity(client.key(constants.users))
+            new_user.update({"id": account_id, 
+                            "name": account_name})
+            client.put(new_user)
+            message = "Nice to meet you "
 
         flask.session.pop('oauth_state', None)
         flask.session.pop('credentials', None)
 
-        return flask.render_template("userinfo.html", token = jwt)
+        return flask.render_template("userinfo.html", token = jwt, id = account_id, 
+                                                      name = account_name, message = message)
+
         
 @app.route('/oauth2callback')
 def oauth2callback():
@@ -201,4 +218,5 @@ def delete_boat_belonging_to_user(boat_id):
 
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=8081, debug=True)
+    app.debug = False
+    app.run()        

@@ -10,3 +10,12 @@ def check_attributes_validity(content, item_type):
         if "weight" not in content or "content" not in content or "delivery_date" not in content:
             return -1
     return 1
+
+def user_exists(client, accout_id):
+    query = client.query(kind=constants.boats)
+    results = list(query.fetch())
+
+    for user in results:
+        if user["id"] == accout_id:
+            return True
+    return False
